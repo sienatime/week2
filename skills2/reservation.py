@@ -52,6 +52,9 @@ import datetime
 def parse_date(date_as_string):
     return datetime.datetime.strptime(date_as_string, "%m/%d/%Y")
 
+def calculate_end_date(start_date_obj, stay_length):
+    return start_date_obj + datetime.timedelta(days=int(stay_length))
+
 def parse_one_record(line):
     """Take a line from reservations.csv and return a dictionary representing that record. (hint: use the datetime type when parsing the start and end date columns)"""
     # number of people, start date, end date
@@ -102,7 +105,7 @@ def available(units, reservations, start_date, occupants, stay_length):
             avail_units.append(unit)
 
     date_start = parse_date(start_date)
-    end_date = date_start + datetime.timedelta(days=int(stay_length))
+    end_date = calculate_end_date(date_start,stay_length)
     
     #if you rule out a unit, you need to then not check it again if there are multiple reservations.
     for i in range(len(avail_units)):
@@ -124,10 +127,6 @@ def available(units, reservations, start_date, occupants, stay_length):
 
     return final_units
 
-    # for unit in avail_units:
-    #     if unit != "bad unit":
-    #         print "Unit %d (Size %d) is available" % (unit[0], unit[1])
-
 def reserve(units, reservations, unit_id, start_date, stay_length):
     #Use the 'reservations' variable as your database. Store all the reservations in there, including the ones from the new ones you will create.
     occupants = 1
@@ -139,7 +138,7 @@ def reserve(units, reservations, unit_id, start_date, stay_length):
 
     for unit in final_units:
         if int(unit_id) == unit[0]:
-            end_date = parse_date(start_date) + datetime.timedelta(days=int(stay_length))
+            end_date = calculate_end_date(parse_date(start_date), stay_length)
             str_end_date = end_date.strftime('%m/%d/%Y')
             d = parse_one_record( unit_id + ", " + start_date + ", " + str_end_date)
             reservations.append(d)
