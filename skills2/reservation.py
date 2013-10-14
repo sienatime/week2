@@ -50,9 +50,6 @@ import sys
 import datetime
 
 def parse_date(date_as_string):
-    #date_as_string must be formatted like "10/9/2013" (month, day, year)
-    # split_tokens = date_as_string.split("/")
-    # date = datetime.date(int(split_tokens[2]), int(split_tokens[0]), int(split_tokens[1]))
     return datetime.datetime.strptime(date_as_string, "%m/%d/%Y")
 
 def parse_one_record(line):
@@ -60,9 +57,10 @@ def parse_one_record(line):
     # number of people, start date, end date
     d = {}
     tokens = line.split(", ")
-    d["Unit ID"] = tokens[0]
+
+    d["Unit ID"] = int(tokens[0])
     d["Start Date"] = parse_date(tokens[1])
-    d["End Date"] = parse_date(tokens[2])
+    d["End Date"] = parse_date(tokens[2].strip("\n"))
     return d
 
 def read_units():
@@ -87,50 +85,69 @@ def read_existing_reservations():
     lines = f.readlines()
     f.close()
 
-    list_of_tuples = []
+    dict_list = []
 
     for i in range(len(lines)):
-        splt = lines[i].split(", ")
-        list_of_tuples.append( (int(splt[0]), parse_date(splt[1]), parse_date(splt[2].strip("\n"))) )
+        dict_list.append( parse_one_record(lines[i]) )
 
-    return list_of_tuples
+    return dict_list
 
 def available(units, reservations, start_date, occupants, stay_length):
-
     #check if existing reservation during that time for the units that can take that many people
-
-    #units is a list of tuples (id, occupancy), reservations is a list (id, start, end)
-    can_hold_occupants = []
+    #units is a list of tuples (id, occupancy), reservations is a list of dictionaries with keys Unit ID, Start Date, End Date.
+    avail_units = []
 
     for unit in units:
         if int(occupants) <= unit[1]:
-            can_hold_occupants.append(unit)
+            avail_units.append(unit)
 
     date_start = parse_date(start_date)
     end_date = date_start + datetime.timedelta(days=int(stay_length))
+    
+    #if you rule out a unit, you need to then not check it again if there are multiple reservations.
+    for i in range(len(avail_units)):
+        unit = avail_units[i]
+        for rezo in reservations: #rezo is a dictionary with keys Unit ID, Start Date, End Date.
+            if unit != "bad unit" and rezo["Unit ID"] == unit[0]:
+                if rezo["Start Date"] == date_start:
+                    avail_units[i] = "bad unit"
+                elif date_start < rezo["Start Date"] and end_date > rezo["Start Date"]:
+                    avail_units[i] = "bad unit"
+                elif date_start > rezo["Start Date"] and end_date < rezo["End Date"]:
+                    avail_units[i] = "bad unit"
 
-    avail_units = []
-
-    print can_hold_occupants
-
-    for unit in can_hold_occupants:
-        for rezo in reservations:
-            if unit[0] == rezo[0]:
-                if date_start < rezo[1] and end_date <= rezo[1]:
-                    print "okay"
-                    avail_units.append(unit)
-                elif date_start >= rezo[1]:
-                    print "also okay"
-                    avail_units.append(unit)
-                else:
-                    print "not okay"
-
+    final_units = []
 
     for unit in avail_units:
-        print "Unit %d (Size %d) is available" % (unit[0], unit[1])
+        if unit != "bad unit":
+            final_units.append(unit)
+
+    return final_units
+
+    # for unit in avail_units:
+    #     if unit != "bad unit":
+    #         print "Unit %d (Size %d) is available" % (unit[0], unit[1])
 
 def reserve(units, reservations, unit_id, start_date, stay_length):
-    print "Successfully reserved"
+    #Use the 'reservations' variable as your database. Store all the reservations in there, including the ones from the new ones you will create.
+    occupants = 1
+    for unit in units:
+        if unit[0] == int(unit_id):
+            occupants = unit[1]
+
+    final_units = available(units, reservations, start_date, occupants, stay_length)
+
+    for unit in final_units:
+        if int(unit_id) == unit[0]:
+            end_date = parse_date(start_date) + datetime.timedelta(days=int(stay_length))
+            str_end_date = end_date.strftime('%m/%d/%Y')
+            d = parse_one_record( unit_id + ", " + start_date + ", " + str_end_date)
+            reservations.append(d)
+            print "Successfully reserved unit %s for %s nights." % (unit_id, stay_length)
+            return reservations
+
+    print "Unit %s is unavailable during those dates" % unit_id
+    return reservations
 
 def main():
     units = read_units()
@@ -141,9 +158,15 @@ def main():
         cmd = command.split()
         if cmd[0] == "available":
             # look up python variable arguments for explanation of the *
-            available(units, reservations, *cmd[1:])
+            final_units = available(units, reservations, *cmd[1:])
+            if len(final_units) > 0:
+                for unit in final_units:
+                    print "Unit %d (Size %d) is available" % (unit[0], unit[1])
+            else:
+                print "No units matching those parameters available for reservation."
+            
         elif cmd[0] == "reserve":
-            reserve(units, reservations, *cmd[1:])
+            reservations = reserve(units, reservations, *cmd[1:])
         elif cmd[0] == "quit":
             sys.exit(0)
         else:
